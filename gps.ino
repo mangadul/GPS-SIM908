@@ -9,6 +9,7 @@
  *  
  */
 
+#include <SoftwareSerial.h>
 
 int8_t answer;
 int onModulePin = 3;
@@ -50,7 +51,10 @@ int ledpin = 13;
 int ledgps = 10;
 int ledground = 11;
 int ledengine = 8;
+
 char inchar;
+
+uint8_t istrack = 0;
 
 void setup(){
     
@@ -64,11 +68,11 @@ void setup(){
     Serial.println(F("******************************"));
   }
   
-  pinMode(pin_gsm,OUTPUT);            
+  pinMode(pin_gsm,OUTPUT);            // Set the pins
   pinMode(pin_gps,OUTPUT);
   pinMode(pin_power,OUTPUT);
+  pinMode(ledengine,OUTPUT);
   
-  pinMode(ledengine,OUTPUT);  
   pinMode(ledpin,OUTPUT);
   pinMode(ledgps,OUTPUT);
   pinMode(ledground,OUTPUT);    
@@ -86,47 +90,50 @@ void setup(){
     gps_on();
     
     digitalWrite(ledgps,LOW);
-         
-	gsm_enable();
-	ready_to_go = true;
+          
+    gsm_enable();
+    ready_to_go = true;
+    
+    sendATcommand("AT", "OK", 2000);  
+    //sendATcommand("AT+CPIN=?", "OK", 2000);  
+    sendATcommand("AT+CPIN?", "OK", 2000);  
+    sendATcommand("AT+CSQ", "OK", 2000);
+    while( (sendATcommand("AT+CREG?", "+CREG: 0,1", 1000)) == 0 || sendATcommand("AT+CREG?", "+CREG: 0,5", 1000));
+    
+    sendATcommand("AT+CLIP=1", "OK", 1000); 
+    
+    digitalWrite(ledgps,HIGH);
+    while ( start_GPS() == 0);
+    delay(2000);
+    digitalWrite(ledgps,LOW);
+    digitalWrite(ledpin,LOW);
 
-	sendATcommand("AT", "OK", 2000);  
-	//sendATcommand("AT+CPIN=?", "OK", 2000);  
-	sendATcommand("AT+CPIN?", "OK", 2000);  
-	sendATcommand("AT+CSQ", "OK", 2000);
-	while( (sendATcommand("AT+CREG?", "+CREG: 0,1", 1000)) == 0 || sendATcommand("AT+CREG?", "+CREG: 0,5", 1000));
+    sendATcommand("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK", 2000);
+    sendATcommand("AT+SAPBR=3,1,\"APN\",\"internet\"", "OK", 2000);
+    sendATcommand("AT+SAPBR=3,1,\"USER\",\"\"", "OK", 2000);
+    sendATcommand("AT+SAPBR=3,1,\"PWD\",\"\"", "OK", 2000);
+  
+    Serial.println("AT+SAPBR=1,1");
+    delay(10000);
+    Serial.println("AT+HTTPINIT");
+    delay(2000);
+    Serial.println("AT+HTTPPARA=\"CID\",1");
+    delay(2000);              
 
-	sendATcommand("AT+CLIP=1", "OK", 1000); 
+    while (sendATcommand("AT+SAPBR=4,1", "OK", 20000) == 0)
+    {
+        delay(5000);
+    }
 
-	digitalWrite(ledgps,HIGH);
-	while ( start_GPS() == 0);
-	delay(2000);
-	digitalWrite(ledgps,LOW);
-	digitalWrite(ledpin,LOW);
-
-	sendATcommand("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", "OK", 2000);
-	sendATcommand("AT+SAPBR=3,1,\"APN\",\"internet\"", "OK", 2000);
-	sendATcommand("AT+SAPBR=3,1,\"USER\",\"\"", "OK", 2000);
-	sendATcommand("AT+SAPBR=3,1,\"PWD\",\"\"", "OK", 2000);
-
-	Serial.println("AT+SAPBR=1,1");
-	delay(10000);
-	Serial.println("AT+HTTPINIT");
-	delay(2000);
-	Serial.println("AT+HTTPPARA=\"CID\",1");
-	delay(2000);              
-
-	while (sendATcommand("AT+SAPBR=4,1", "OK", 20000) == 0)
-	{
-	  delay(5000);
-	}
-
-	if(debug)
-	{
-	Serial.println(F("\n****************************"));
-	Serial.println(F("READY TO GO\n"));
-	Serial.println(F("****************************\n"));
-	}  
+    if(debug)
+    {
+      Serial.println("AT+CMGD=1,4");
+      Serial.println("Hapus pesan masuk....");
+      
+      Serial.println(F("\n****************************"));
+      Serial.println(F("READY TO GO\n"));
+      Serial.println(F("****************************\n"));
+    }  
   }
   else
   {
@@ -138,20 +145,17 @@ void setup(){
     } 
   };
   
-  Serial.println("AT+CMGD=1,4");
-
 }
 
 
 void loop(){
 if(ready_to_go)
 {
-  //wait for sms command
-  digitalWrite(ledpin,HIGH);
-  delay(100);
+  
   if(Serial.available()>0)
   {
-    // untuk membaca pesan masuk di urutan pertama
+
+    // untuk membaca pesan masuk di uriutan pertama
     inchar=Serial.read();
     if(inchar=='T')
     {
@@ -169,26 +173,28 @@ if(ready_to_go)
     // start and stop engine
     else if (inchar=='S')
     {
-      // perintah sms "SE" untuk mnghidupkan mesin
+      // perintah sms "SE" untuk menghidupkan mesin
       delay(10);
       inchar=Serial.read(); 
       if (inchar=='E')                                     
       {
+        Serial.println("(SE) Hidupkan Mesin ...");                   
         delay(10);
         digitalWrite(ledengine,HIGH);                         
         delay(50);        
         Serial.println("AT+CMGD=1,4");    // hapus seluruh pesan masuk (sms inbox)
-        delay(500);
+        delay(100);
       }
       
-      // perintah sms "SE" untuk mematikan mesin
+      // perintah sms "ST" untuk mematikan mesin
       if (inchar=='T')                                    
       {
+        Serial.println("(ST) Matikan Mesin ...");                   
         delay(10);
         digitalWrite(ledengine,LOW);                         
         delay(50);
         Serial.println("AT+CMGD=1,4");                   
-        delay(500);
+        delay(100);
       }
     }
     
@@ -197,91 +203,125 @@ if(ready_to_go)
     {
       
       // perintah sms "GN" untuk memulai mode pemindaian GPS dan mengirimkan titik lokasi ke server
-      delay(10);
+      delay(10);            
       inchar=Serial.read(); 
       if (inchar=='N')                                     
       {
+        Serial.println("(GN) Kirim koordinat lokasi ...");                   
         delay(10);
-        digitalWrite(ledgps,HIGH);                         
+        digitalWrite(ledpin,HIGH);                         
         delay(50);
-        while ( start_GPS() == 0);    
-        digitalWrite(ledgps,LOW);  
         get_GPS();  
         send_HTTP(); // kirim titik lokasi ke server
-        delay(5000);
+        delay(2000);
         Serial.println("AT+CMGD=1,4");                   
         delay(500);
+        digitalWrite(ledpin,LOW);  
       }
 
-      // perintah sms "GS" untuk mengirimkan titik lokasi ke no hp
-      if (inchar=='S')                                     
+      // perintah sms "GM" untuk mengirimkan titik lokasi ke no hp
+      if (inchar=='M')                                     
       {
+        Serial.println("(GS) Kirim koordinat lokasi vis SMS...");                   
         delay(10);
-        digitalWrite(ledgps,HIGH);                         
-        delay(50);
-        while ( start_GPS() == 0);    
-        digitalWrite(ledgps,LOW);  
+        digitalWrite(ledpin,HIGH);                         
         get_GPS();
-        sendSMS();
+        boolean iskirim = false;
+        if(!iskirim) {
+          sendSMS();
+          iskirim = true;
+        }
         delay(1000);
         Serial.println("AT+CMGD=1,4"); 
-        delay(500);
+        delay(100);
+        digitalWrite(ledpin,LOW);  
       }
 
-      // perintah sms "GF" untuk menghentikan mode pemindaian GPS      
-      if (inchar=='F')                                    
+      // perintah sms "GS" untuk menghentikan tracking GPS      
+      if (inchar=='S')                                    
       {
+        Serial.println("(GS) Stop GPS Tracking ...");                   
         delay(10);
-        digitalWrite(ledgps,LOW);                         
+        digitalWrite(ledpin,LOW);                         
         delay(50);
-        stop_gps();
+        istrack = 0;
+        //stop_gps();
+        gpsTracking(0);        
         delay(5000);
         Serial.println("AT+CMGD=1,4");                   
-        delay(500);
+        delay(100);
+      }
+
+      if (inchar=='T')
+      {
+        Serial.println("(GT) Start GPS Tracking ...");                   
+        delay(10);
+        get_GPS();        
+        Serial.println("AT+CMGD=1,4"); 
+        delay(100);
+        gpsTracking(istrack);
+      }
+
+      if (inchar=='1')
+      {
+        Serial.println("(G1) set GPS Tracking ON ...");                   
+        istrack=1;
+        Serial.println("AT+CMGD=1,4"); 
+        delay(100);
+      }
+
+      if (inchar=='0')
+      {
+        Serial.println("(G0) set GPS Tracking OFF ...");                   
+        istrack=0;
+        Serial.println("AT+CMGD=1,4"); 
+        delay(100);
       }
       
     } 
     
     // melakukan panggilan ke no hp
-    else if (inchar=='C')
+    else if (inchar=='P')
     {
       
-        // perintah sms "CM" untuk menghubungi no 
+        // perintah sms "PC" untuk menghubungi no 
         delay(10);
         inchar=Serial.read(); 
-        if (inchar=='M')                                     
+        if (inchar=='C')                                     
         {
+          Serial.println("(PC) Lakukan panggilan telepon...");                   
           delay(10);
-          digitalWrite(ledgps,HIGH);                         
+          digitalWrite(ledpin,HIGH);                         
           delay(50);
-          Serial.println("AT");
-          delay(2000);
           Serial.println("AT");   
           delay(2000);        
           //Make a phone call
           Serial.println("ATD+6289689321978;");
           while(1);
-              Serial.println("AT+CMGD=1,4");                   
-              delay(500);
+          delay(100);
+          Serial.println("AT+CMGD=1,4");                   
+          delay(100);
+          digitalWrite(ledpin,LOW);                         
         }
         
-        // perintah "CS" untuk menutup telepon 
+        // perintah "PS" untuk menutup telepon 
         if (inchar=='S')                                    
         {
+          Serial.println("(PS) Tutup panggilan telepon...");                   
           delay(10);
-          digitalWrite(ledgps,LOW);                         
+          digitalWrite(ledpin,LOW);                         
           delay(50);
           //Make a phone call
           Serial.println("ATH");
           delay(100);
           Serial.println("AT+CMGD=1,4");                   
-          delay(500);
+          delay(100);
         }
         
      }   
       
   }
-
+  
 } //end ready_togo
   
 } // end loop
@@ -306,7 +346,7 @@ int8_t start_GPS(){
     // starts the GPS
     //sendATcommand("AT", "OK", 2000);
     sendATcommand("AT+CGPSPWR=1", "OK", 2000);
-    sendATcommand("AT+CGPSRST=1", "OK", 2000);
+    sendATcommand("AT+CGPSRST=0", "OK", 2000);
       
     // waits for fix GPS
     while(( (sendATcommand("AT+CGPSSTATUS?", "2D Fix", 5000) || 
@@ -477,61 +517,38 @@ int8_t convert2Degrees(char* input){
     input[indice]='\0';
 }
 
-void send_HTTP(){    
+void send_HTTP(){
+    
+    uint8_t answer=0;
     // Initializes HTTP service
-    answer = sendATcommand("AT+HTTPINIT", "OK", 10000);
-    if (answer == 1)
-    {
-        // Sets CID parameter
-        answer = sendATcommand("AT+HTTPPARA=\"CID\",1", "OK", 5000);
-        if (answer == 1)
-        {
-            // Sets url 
-            sprintf(aux_str, "AT+HTTPPARA=\"URL\",\"http://%s/trak.php?", url);
-            Serial.print(aux_str);
-            imei = sendATcommand("AT+GSN", "OK", 2000);     
-            cimei = sendATcommand("AT+CGSN", "OK", 2000);     
-            sprintf(frame, "visor=false&latitude=%s&longitude=%s&altitude=%s&time=%s&satellites=%s&speedOTG=%s&course=%s&imei=%s&cimei=%s",
-            latitude, longitude, altitude, date, satellites, speedOTG, course, imei, cimei);
-            Serial.print(frame);
-            answer = sendATcommand("\"", "OK", 5000);
-            if (answer == 1)
-            {
-                // Starts GET action
-                answer = sendATcommand("AT+HTTPACTION=0", "+HTTPACTION:0,200", 30000);
-                if (answer == 1)
-                {
-                    //digitalWrite(ledpin,HIGH);  
-                    digitalWrite(ledpin,HIGH);  
-                    delay(50);
-                    Serial.println(F("Done!"));
-                }
-                else
-                {
-                    Serial.println(F("Error getting url"));
-                }
-
-            }
-            else
-            {
-                Serial.println(F("Error setting the url"));
-            }
-        }
-        else
-        {
-            Serial.println(F("Error setting the CID"));
-        }    
-    }
-    else
-    {
-        Serial.println(F("Error initializating"));
-    }
-  
-    digitalWrite(ledpin,LOW);  
+    sendATcommand("AT+CGATT=1", "OK", 2000);
+    sendATcommand("AT+SAPBR=2,1", "+SAPBR:", 2000);
+    //answer = sendATcommand("AT+HTTPINIT", "OK", 10000);
+    sendATcommand("AT+HTTPINIT", "OK", 5000);
+    // Sets CID parameter
+    sendATcommand("AT+HTTPPARA=\"CID\",1", "OK", 2000);
+    Serial.print("AT+HTTPPARA=\"URL\",\"http://demo.alphamedia.web.id/arduino/gps/trak.php?visor=false&latitude=");
+    Serial.print(latitude);
+    Serial.print("&longitude=");
+    Serial.print(longitude);
+    Serial.print("&altitude=");
+    Serial.print(altitude);              
+    Serial.print("&time=");
+    Serial.print(date);              
+    Serial.print("&satellites=");
+    Serial.print(satellites);              
+    Serial.print("&speedOTG=");
+    Serial.print(speedOTG);              
+    Serial.print("&course=");
+    Serial.print(course);              
+    Serial.println("\"");
+    delay(2000);
+    Serial.println("AT+HTTPACTION=0"); //now GET action
+    delay(2000);    
+    Serial.println(F("Done!"));
     sendATcommand("AT+HTTPTERM", "OK", 5000);
     
 }
-
 
 int8_t sendATcommand(char* ATcommand, char* expected_answer1, unsigned int timeout){
 
@@ -567,9 +584,7 @@ int8_t sendATcommand(char* ATcommand, char* expected_answer1, unsigned int timeo
 }
 
 
-void sendSMS(){
-
-    //sendATcommand("AT+CPIN=****", "OK", 2000);    
+boolean sendSMS(){
     delay(3000);    
     Serial.println("Konek ke jaringan...");
     while( (sendATcommand("AT+CREG?", "+CREG: 0,1", 500) || 
@@ -617,7 +632,7 @@ void sendSMS(){
         Serial.print("error ");
         Serial.println(answer, DEC);
     }
-
+    return true;
 }
 
 void gps_enable(void)
@@ -719,13 +734,25 @@ void gps_on()
     Serial.println(F("GPS Power ON\n"));  
 
     Serial.println(F("Set GPS ON autonomy mode...\n"));  
-    gpsrst = sendATcommand("AT+CGPSRST=1","OK",2000);
+    gpsrst = sendATcommand("AT+CGPSRST=0","OK",2000);
     if (gpsrst == 0)
     {
-      gpsrst = sendATcommand("AT+CGPSRST=1","OK",2000);
+      gpsrst = sendATcommand("AT+CGPSRST=0","OK",2000);
       while(answer == 0){
-        gpsrst = sendATcommand("AT+CGPSRST=1","OK",2000);
+        gpsrst = sendATcommand("AT+CGPSRST=0","OK",2000);
       }
     }    
     Serial.println(F("GPS set Mode : Autonomy mode\n"));  
+}
+
+void gpsTracking(uint8_t istrack)
+{  
+  while(istrack == 1)
+  {
+    digitalWrite(ledpin,HIGH);  
+    get_GPS();  
+    send_HTTP(); 
+    delay(5000);  
+    digitalWrite(ledpin,LOW);  
+  }
 }
