@@ -147,7 +147,7 @@ void loop(){
 if(ready_to_go)
 {
   //wait for sms command
-  digitalWrite(ledgps,HIGH);
+  digitalWrite(ledpin,HIGH);
   delay(100);
   if(Serial.available()>0)
   {
