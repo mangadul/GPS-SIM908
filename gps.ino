@@ -696,7 +696,7 @@ boolean powerUpSim908(void)
       turnedON = false;
       if(debug)
       {
-    Serial.println(F("\nTrying agin to turn on SIM908"));  
+    Serial.println(F("\nTrying again to turn on SIM908"));  
       }
     };
   }
